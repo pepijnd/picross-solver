@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+//use std::collections::HashMap;
+use hashbrown::HashMap;
 
 #[allow(deprecated)]
 pub mod error {
@@ -102,7 +103,8 @@ mod parse_input {
 }
 
 pub mod util {
-    use std::collections::HashMap;
+    //use std::collections::HashMap;
+    use hashbrown::HashMap;
 
     use super::{ClueMask, Mask, SolverCache};
 
@@ -127,20 +129,36 @@ pub mod util {
     }
 
     pub fn partitions(count: u32, max: u32) -> Vec<Vec<u32>> {
+        let mut len = 0;
         let mut output = Vec::new();
-        if count == 2 {
-            for i in 0..=max {
-                output.push(vec![i, max - i]);
-            }
-            return output;
-        } 
-        for i in 0..=max {
-                for mut j in partitions(count - 1, max - i) {
-                    let mut partial = vec![i];
-                    partial.append(&mut j);
-                    output.push(partial);
+        while len < count {
+            if len == 0 {
+                for i in 0..=max {
+                    output.push(vec![i])
                 }
+            } else if len == count-1 {
+                let mut new_output = Vec::new();
+                for mut part in output {
+                    let sum = part.iter().sum::<u32>();
+                    part.push(max-sum);
+                    new_output.push(part);
+                }
+                output = new_output;
+            } else {
+                let mut new_output = Vec::new();
+
+                for part in output {
+                    let sum = part.iter().sum::<u32>();
+                    for i in 0..=max-sum {
+                        let mut new = part.clone();
+                        new.push(i);
+                        new_output.push(new);
+                    }
+                }
+                output = new_output;
             }
+            len+=1;
+        }
         output
     }
 
@@ -185,7 +203,7 @@ pub struct Puzzle {
 
 #[derive(Debug)]
 pub struct Output {
-    output_data: Vec<bool>,
+    output_data: Vec<Mask>,
     width: usize,
     height: usize,
 }
@@ -336,7 +354,7 @@ impl Puzzle {
     }
 
     pub fn solve(&self) -> Option<Output> {
-        let mut solver = Solver::new(&self.input);
+        let solver = Solver::new(&self.input);
         solver.solve()
     }
 }
@@ -416,8 +434,6 @@ impl<'a> Solver<'a> {
     }
 
     pub fn solve(&self) -> Option<Output> {
-        let mut output = Output::new(self.input.columns.len(), self.input.rows.len());
-
         let mut solver_cache = SolverCache::new();
 
         let width = self.input.columns.len();
@@ -457,17 +473,7 @@ impl<'a> Solver<'a> {
             }
             unsolved = new_unsolved;
         }
-        for n in 0..mask_grid.height {
-            let row = mask_grid.get_row(n);
-            print!("\n");
-            let _ = row
-                .iter()
-                .map(|e| {
-                    print!("{}", String::from(*e));
-                })
-                .collect::<()>();
-        }
-        Some(output)
+        Some(Output::from(mask_grid))
     }
 }
 
@@ -478,5 +484,38 @@ impl Output {
             width,
             height,
         }
+    }
+
+    pub fn get_size(&self) -> (usize, usize) {
+        return (self.width, self.height);
+    }
+
+    pub fn to_rgba(&self, res: u32) -> Box<[u8]> {
+        let mut rgba = Vec::new();
+        for h in 0..self.height {
+            for _ in 0..res {
+                for w in 0..self.width {
+                    let cell = self.width * h + w;
+                    let color: Vec<u8> = match self.output_data[cell] {
+                        Mask::Set => vec![0, 0, 0, 255],
+                        Mask::Unset => vec![255, 255, 255, 255],
+                        Mask::Unknown => vec![127, 127, 127, 255],
+                    };
+                    for _ in 0..res {
+                        rgba.append(&mut color.clone());
+                    }
+                }
+            }
+        }
+        rgba.into_boxed_slice()
+    }
+}
+
+impl From<MaskGrid> for Output {
+    fn from(maskgrid: MaskGrid) -> Output {
+        let mut output = Output::new(maskgrid.width, maskgrid.height);
+        output.output_data = maskgrid.grid;
+
+        output
     }
 }
