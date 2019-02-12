@@ -389,11 +389,14 @@ impl Clue {
                 let mut clue_mask_option = Vec::with_capacity(len);
                 for (i, space) in spacing.iter().enumerate() {
                     if *space > 0 {
-                        clue_mask_option.append(&mut vec![Mask::Unset; *space as usize]);
+                        for _ in 0..*space {
+                            clue_mask_option.push(Mask::Unset);
+                        }
                     }
                     if i < spacing.len() - 1 {
-                        clue_mask_option
-                            .append(&mut vec![Mask::Set; *self.sets.get(i).unwrap() as usize]);
+                        for _ in 0..self.sets[i] {
+                            clue_mask_option.push(Mask::Set);
+                        }
                     }
                 }
                 let clue_mask = ClueMask::from(clue_mask_option);
