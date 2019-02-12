@@ -115,29 +115,21 @@ pub mod util {
             return cache.spacing_cache.get(&(count, max)).unwrap();
         }
 
-        let mut parts = partitions(count, max);
-        parts.retain(|e| {
-            for i in 1..e.len() - 1 {
-                if *e.get(i).unwrap() == 0 {
-                    return false;
-                }
-            }
-            true
-        });
+        let parts = partitions(count, max);
         cache.spacing_cache.insert((count, max), parts);
         cache.spacing_cache.get(&(count, max)).unwrap()
     }
 
     pub fn partitions(count: u32, max: u32) -> Vec<Vec<u32>> {
         let mut len = 0;
-        let mut output = Vec::new();
+        let mut output = Vec::with_capacity(max as usize);
         while len < count {
             if len == 0 {
                 for i in 0..=max {
                     output.push(vec![i])
                 }
             } else if len == count-1 {
-                let mut new_output = Vec::new();
+                let mut new_output = Vec::with_capacity(output.len());
                 for mut part in output {
                     let sum = part.iter().sum::<u32>();
                     part.push(max-sum);
@@ -145,11 +137,11 @@ pub mod util {
                 }
                 output = new_output;
             } else {
-                let mut new_output = Vec::new();
+                let mut new_output = Vec::with_capacity(output.len()*(max as usize)/2);
 
                 for part in output {
                     let sum = part.iter().sum::<u32>();
-                    for i in 0..=max-sum {
+                    for i in 1..=max-sum {
                         let mut new = part.clone();
                         new.push(i);
                         new_output.push(new);
@@ -163,8 +155,9 @@ pub mod util {
     }
 
     pub fn combine_cluemasks(cluemasks: &Vec<ClueMask>) -> ClueMask {
-        let mut output = Vec::new();
-        for i in 0..cluemasks.get(0).unwrap().mask.len() {
+        let len = cluemasks.first().unwrap().mask.len();
+        let mut output = Vec::with_capacity(len);
+        for i in 0..len {
             let i_mask: Mask = cluemasks
                 .iter()
                 .map(|e| e.mask.get(i).unwrap())
@@ -386,33 +379,35 @@ impl Clue {
         mask_id: u32,
         cache: &mut SolverCache,
     ) -> Option<ClueMask> {
-        let mut clue_mask_new = Vec::new();
-        let clue_mask_set = {
-            if cache.clue_mask_cache.contains_key(&mask_id) {
-                cache.clue_mask_cache.get_mut(&mask_id).unwrap()
-            } else {
-                let spacings =
-                    util::spacings(self.spaces_count(), self.get_total_spaces(len), cache);
-                for spacing in spacings {
-                    let mut clue_mask_option = Vec::new();
-                    for (i, space) in spacing.iter().enumerate() {
-                        if *space > 0 {
-                            clue_mask_option.append(&mut vec![Mask::Unset; *space as usize]);
-                        }
-                        if i < spacing.len() - 1 {
-                            clue_mask_option
-                                .append(&mut vec![Mask::Set; *self.sets.get(i).unwrap() as usize]);
-                        }
+        let mut clue_mask_set = cache.clue_mask_cache.get_mut(&mask_id);
+        let in_cache = clue_mask_set.is_some();
+        if !in_cache {
+            let spacings =
+                util::spacings(self.spaces_count(), self.get_total_spaces(len), cache);
+            let mut clue_mask_new = Vec::with_capacity(spacings.len());
+            for spacing in spacings {
+                let mut clue_mask_option = Vec::with_capacity(len);
+                for (i, space) in spacing.iter().enumerate() {
+                    if *space > 0 {
+                        clue_mask_option.append(&mut vec![Mask::Unset; *space as usize]);
                     }
-                    let clue_mask = ClueMask::from(clue_mask_option);
+                    if i < spacing.len() - 1 {
+                        clue_mask_option
+                            .append(&mut vec![Mask::Set; *self.sets.get(i).unwrap() as usize]);
+                    }
+                }
+                let clue_mask = ClueMask::from(clue_mask_option);
+                if clue_mask.filter_match(filter) {
                     clue_mask_new.push(clue_mask);
                 }
-                cache.clue_mask_cache.insert(mask_id, clue_mask_new);
-                cache.clue_mask_cache.get_mut(&mask_id).unwrap()
             }
-        };
-
-        clue_mask_set.retain(|e| e.filter_match(filter));
+            cache.clue_mask_cache.insert(mask_id, clue_mask_new);
+            clue_mask_set = cache.clue_mask_cache.get_mut(&mask_id)
+        }
+        let clue_mask_set = clue_mask_set.unwrap();
+        if in_cache {
+            clue_mask_set.retain(|e| e.filter_match(filter));
+        }
         Some(util::combine_cluemasks(clue_mask_set))
     }
 }
