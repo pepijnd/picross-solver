@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-
-//use std::collections::HashMap;
 use hashbrown::HashMap;
 
 #[allow(deprecated)]
@@ -28,21 +25,21 @@ mod parse_input {
     use super::{ErrorKind, Result};
 
     pub fn parse_input_string(input: String) -> Result<(Vec<Clue>, Vec<Clue>)> {
-        let input: Vec<String> = input.split_whitespace().map(|e| String::from(e)).collect();
+        let input: Vec<String> = input.split_whitespace().map(String::from).collect();
         let n_cols = input
             .get(0)
-            .ok_or::<ErrorKind>(ErrorKind::InvalidInput.into())?
+            .ok_or::<ErrorKind>(ErrorKind::InvalidInput)?
             .parse::<usize>()?;
         let n_rows = input
             .get(1)
-            .ok_or::<ErrorKind>(ErrorKind::InvalidInput.into())?
+            .ok_or::<ErrorKind>(ErrorKind::InvalidInput)?
             .parse::<usize>()?;
         let cols = input
             .get(2)
-            .ok_or::<ErrorKind>(ErrorKind::InvalidInput.into())?;
+            .ok_or::<ErrorKind>(ErrorKind::InvalidInput)?;
         let rows = input
             .get(3)
-            .ok_or::<ErrorKind>(ErrorKind::InvalidInput.into())?;
+            .ok_or::<ErrorKind>(ErrorKind::InvalidInput)?;
 
         let cols = parse_clues_string(cols)?;
         let rows = parse_clues_string(rows)?;
@@ -54,7 +51,7 @@ mod parse_input {
         Ok((cols, rows))
     }
 
-    pub fn parse_clues_string(clues: &String) -> Result<Vec<Clue>> {
+    pub fn parse_clues_string(clues: &str) -> Result<Vec<Clue>> {
         let mut in_clue = false;
         let mut clue_string = String::new();
         let mut clue_list = Vec::new();
@@ -72,13 +69,11 @@ mod parse_input {
                 if in_clue {
                     clue_string.push(c);
                 }
-            } else {
-                if in_clue {
+            } else if in_clue {
                     clue_string.push(c);
                 } else {
                     return Err(ErrorKind::InvalidInput.into());
                 }
-            }
         }
         if in_clue {
             return Err(ErrorKind::InvalidInput.into());
@@ -86,7 +81,7 @@ mod parse_input {
         Ok(clue_list)
     }
 
-    pub fn parse_clue_string(clue: &String) -> Result<Clue> {
+    pub fn parse_clue_string(clue: &str) -> Result<Clue> {
         let mut current = String::new();
         let mut sets = Vec::new();
         for c in clue.chars() {
@@ -103,20 +98,16 @@ mod parse_input {
 }
 
 pub mod util {
-    //use std::collections::HashMap;
-    use hashbrown::HashMap;
-
+    use super::HashMap;
     use super::{ClueMask, Mask, SolverCache};
 
     pub type SpacingCache = HashMap<(u32, u32), Vec<Vec<u32>>>;
 
     pub fn spacings(count: u32, max: u32, cache: &mut SolverCache) -> &Vec<Vec<u32>> {
-        if cache.spacing_cache.contains_key(&(count, max)) {
-            return cache.spacing_cache.get(&(count, max)).unwrap();
+        if !cache.spacing_cache.contains_key(&(count, max)) {
+            let parts = partitions(count, max);
+            cache.spacing_cache.insert((count, max), parts);
         }
-
-        let parts = partitions(count, max);
-        cache.spacing_cache.insert((count, max), parts);
         cache.spacing_cache.get(&(count, max)).unwrap()
     }
 
@@ -128,20 +119,20 @@ pub mod util {
                 for i in 0..=max {
                     output.push(vec![i])
                 }
-            } else if len == count-1 {
+            } else if len == count - 1 {
                 let mut new_output = Vec::with_capacity(output.len());
                 for mut part in output {
                     let sum = part.iter().sum::<u32>();
-                    part.push(max-sum);
+                    part.push(max - sum);
                     new_output.push(part);
                 }
                 output = new_output;
             } else {
-                let mut new_output = Vec::with_capacity(output.len()*(max as usize)/2);
+                let mut new_output = Vec::with_capacity(output.len() * (max as usize) / 2);
 
                 for part in output {
                     let sum = part.iter().sum::<u32>();
-                    for i in 1..=max-sum {
+                    for i in 1..=max - sum {
                         let mut new = part.clone();
                         new.push(i);
                         new_output.push(new);
@@ -149,27 +140,25 @@ pub mod util {
                 }
                 output = new_output;
             }
-            len+=1;
+            len += 1;
         }
         output
     }
 
-    pub fn combine_cluemasks(cluemasks: &Vec<ClueMask>) -> ClueMask {
+    pub fn combine_cluemasks(cluemasks: &[ClueMask]) -> ClueMask {
         let len = cluemasks.first().unwrap().mask.len();
         let mut output = Vec::with_capacity(len);
         for i in 0..len {
-            let i_mask: Mask = cluemasks
-                .iter()
-                .map(|e| e.mask.get(i).unwrap())
-                .fold(None, |acc, x| {
-                    if acc.is_none() || acc.as_ref().unwrap() == x {
-                        Some(*x)
-                    } else {
-                        Some(Mask::Unknown)
-                    }
-                })
-                .unwrap();
-            output.push(i_mask)
+            let mut mask_part = Mask::Unknown;
+            for j in cluemasks.iter() {
+                if mask_part == Mask::Unknown {
+                    mask_part = j.mask[i];
+                } else if j.mask[i] != mask_part {
+                    mask_part = Mask::Unknown;
+                    break;
+                }
+            }
+            output.push(mask_part);
         }
         ClueMask::new(output)
     }
@@ -321,7 +310,7 @@ impl ClueMask {
     }
 
     fn as_vec(&self) -> Vec<Mask> {
-        self.mask.iter().map(|e| *e).collect()
+        self.mask.to_vec()
     }
 
     fn iter(&self) -> std::slice::Iter<Mask> {
@@ -357,12 +346,6 @@ impl Clue {
         Clue { sets }
     }
 
-    fn min_len(&self) -> usize {
-        let mut min_len = self.sets.iter().sum::<u32>() as usize;
-        min_len += self.sets.len() - 1;
-        min_len
-    }
-
     fn spaces_count(&self) -> u32 {
         self.sets.len() as u32 + 1
     }
@@ -370,6 +353,23 @@ impl Clue {
     fn get_total_spaces(&self, len: usize) -> u32 {
         let set_count: u32 = self.sets.iter().sum();
         len as u32 - set_count
+    }
+
+    fn calc_mask_options(&self, spacing: &[u32], len: usize) -> Vec<Mask> {
+        let mut clue_mask_option = Vec::with_capacity(len);
+        for (i, space) in spacing.iter().enumerate() {
+            if *space > 0 {
+                for _ in 0..*space {
+                    clue_mask_option.push(Mask::Unset);
+                }
+            }
+            if i < spacing.len() - 1 {
+                for _ in 0..self.sets[i] {
+                    clue_mask_option.push(Mask::Set);
+                }
+            }
+        }
+        clue_mask_option
     }
 
     fn get_mask(
@@ -382,23 +382,10 @@ impl Clue {
         let mut clue_mask_set = cache.clue_mask_cache.get_mut(&mask_id);
         let in_cache = clue_mask_set.is_some();
         if !in_cache {
-            let spacings =
-                util::spacings(self.spaces_count(), self.get_total_spaces(len), cache);
+            let spacings = util::spacings(self.spaces_count(), self.get_total_spaces(len), cache);
             let mut clue_mask_new = Vec::with_capacity(spacings.len());
             for spacing in spacings {
-                let mut clue_mask_option = Vec::with_capacity(len);
-                for (i, space) in spacing.iter().enumerate() {
-                    if *space > 0 {
-                        for _ in 0..*space {
-                            clue_mask_option.push(Mask::Unset);
-                        }
-                    }
-                    if i < spacing.len() - 1 {
-                        for _ in 0..self.sets[i] {
-                            clue_mask_option.push(Mask::Set);
-                        }
-                    }
-                }
+                let clue_mask_option = self.calc_mask_options(spacing, len);
                 let clue_mask = ClueMask::from(clue_mask_option);
                 if clue_mask.filter_match(filter) {
                     clue_mask_new.push(clue_mask);
@@ -408,7 +395,7 @@ impl Clue {
             clue_mask_set = cache.clue_mask_cache.get_mut(&mask_id)
         }
         let clue_mask_set = clue_mask_set.unwrap();
-        if in_cache {
+        if in_cache && clue_mask_set.len() > 1 {
             clue_mask_set.retain(|e| e.filter_match(filter));
         }
         Some(util::combine_cluemasks(clue_mask_set))
@@ -440,7 +427,11 @@ impl<'a> Solver<'a> {
         let mut mask_grid = MaskGrid::new(width, height);
         let mut unsolved = mask_grid.count_unsolved();
 
-        for j in vec![SolveIter::Colums, SolveIter::Rows].iter().cycle() {
+        for (_n, j) in vec![SolveIter::Colums, SolveIter::Rows]
+            .iter()
+            .cycle()
+            .enumerate()
+        {
             match j {
                 SolveIter::Colums => {
                     for (i, column) in self.input.columns.iter().enumerate() {
@@ -485,7 +476,7 @@ impl Output {
     }
 
     pub fn get_size(&self) -> (usize, usize) {
-        return (self.width, self.height);
+        (self.width, self.height)
     }
 
     pub fn to_rgba(&self, res: u32) -> Box<[u8]> {

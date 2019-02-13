@@ -4,11 +4,8 @@ version = "0.1.0"
 authors = ["Pepijn Dragt <pepijn.dragt@gmail.com>"]
 edition = "2018"
 
-# [profile.release]
-# debug = true
-# lto = false
-
 [dependencies]
 error-chain = "0.12.0"
+time = "0.1.42"
 png = "0.14.0"
 hashbrown = "0.1.8"

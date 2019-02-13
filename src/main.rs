@@ -5,8 +5,8 @@ use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 
-use std::path::Path;
 use std::io::BufWriter;
+use std::path::Path;
 
 use png::HasParameters;
 
@@ -31,10 +31,10 @@ fn main() -> picross::error::Result<()> {
 
     let path = Path::new(out_file);
     let file = File::create(path).unwrap();
-    let ref mut w = BufWriter::new(file);
+    let w = &mut BufWriter::new(file);
 
     let size = output.get_size();
-    let mut encoder = png::Encoder::new(w, (size.0*32) as u32, (size.1*32) as u32);
+    let mut encoder = png::Encoder::new(w, (size.0 * 32) as u32, (size.1 * 32) as u32);
     encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
     let mut writer = encoder.write_header().unwrap();
 
