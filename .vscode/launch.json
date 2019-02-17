@@ -12,7 +12,10 @@
             "args": [],
             "cwd": "${workspaceRoot}",
             "sourceLanguages": ["rust"],
-            "preLaunchTask": "cargo build"
+            "preLaunchTask": "cargo build",
+            "sourceMap": {
+                "/rustc/*/src" : "/home/pepijn/.rustup/toolchains/nightly-2019-02-04-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src" 
+            }
         }
     ]
 }

@@ -10,6 +10,7 @@ pub mod error {
 
         errors {
             InvalidInput
+            PuzzleError
             // ParseInputError(s: String) {
             //     description("Error in parsing input file"),
             //     display("Error in parsing input file: {}", s)
@@ -100,24 +101,122 @@ mod parse_input {
 pub mod util {
     use super::HashMap;
     use super::{ClueMask, Mask, SolverCache};
+    use super::error::*;
 
     pub type SpacingCache = HashMap<(u32, u32), Vec<Vec<u32>>>;
 
-    pub fn spacings(count: u32, max: u32, cache: &mut SolverCache) -> &Vec<Vec<u32>> {
+    pub fn spacings(count: u32, max: u32, cache: &mut SolverCache) -> Result<&Vec<Vec<u32>>> {
         if !cache.spacing_cache.contains_key(&(count, max)) {
-            let parts = partitions(count, max);
+            let parts = partitions(count, max)?;
             cache.spacing_cache.insert((count, max), parts);
         }
-        cache.spacing_cache.get(&(count, max)).unwrap()
+        Ok(cache.spacing_cache.get(&(count, max)).unwrap())
     }
 
-    pub fn partitions(count: u32, max: u32) -> Vec<Vec<u32>> {
+    struct Partitions {
+        count: u32,
+        max: u32
+    }
+
+    struct PartitionIter {
+        count: u32,
+        max: u32,
+        len: u32,
+        subLen: u32,
+        outIter: Option<Box<Iterator<Item=Vec<u32>>>>,
+        index: usize
+    }
+
+    impl IntoIterator for Partitions {
+        type Item = Vec<u32>;
+        type IntoIter = PartitionIter;
+
+        fn into_iter(self) -> Self::IntoIter {
+            PartitionIter { count: self.count, max: self.max, len: 0, subLen: 0, outIter: None, index: 0 }
+        }
+    }
+
+    impl Iterator for PartitionIter {
+        type Item = Vec<u32>;
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.len == 0 {
+                self.outIter = Some(Box::new(
+                    PartitionFirstIter {
+                        count: self.count,
+                        max: self.max,
+                        index: 0
+                    }
+                ))
+                self.len += 1;
+            }
+            if self.len < self.count {
+                } else if len == count - 1 {
+                    None
+                } else {
+                    let next = self.outIter.unwrap().next();
+                    if next.is_none() {
+                        self.outIter = Some(PartitionMidIter {
+                            count: self.count,
+                            max: self.max,
+                            len: self.len,
+                            outIter: None,
+                            index: 0
+                        })
+                        next = self.outIter.unwrap().next();
+                    } else {
+
+                    }
+                }
+            }
+            next
+        }
+    }
+
+    struct PartitionFirstIter {
+        count: u32,
+        max: u32,
+        index: usize
+    }
+
+    impl Iterator for PartitionFirstIter {
+        type Item = Vec<u32>;
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.index <= self.max as usize {
+                let mut new = Vec::with_capacity(2);
+                new.push(self.index as u32);
+                self.index += 1;
+                Some(new)
+            } else {
+                None
+            }
+        }
+    }
+
+    struct PartitionMidIter {
+        count: u32,
+        max: u32,
+        len: u32,
+        outIter: Option<Box<Iterator<Item=Vec<u32>>>>,
+        index: usize
+    }
+
+    impl Iterator for PartitionMidIter {
+        type Item = Vec<u32>;
+        fn next(&mut self) -> Option<Self::Item> {
+
+            None
+        }
+    }
+
+    pub fn partitions(count: u32, max: u32) -> Result<Vec<Vec<u32>>> {
         let mut len = 0;
         let mut output = Vec::with_capacity(max as usize);
         while len < count {
             if len == 0 {
                 for i in 0..=max {
-                    output.push(vec![i])
+                    let mut new = Vec::with_capacity(2);
+                    new.push(i);
+                    output.push(new);
                 }
             } else if len == count - 1 {
                 let mut new_output = Vec::with_capacity(output.len());
@@ -133,7 +232,8 @@ pub mod util {
                 for part in output {
                     let sum = part.iter().sum::<u32>();
                     for i in 1..=max - sum {
-                        let mut new = part.clone();
+                        let mut new = Vec::with_capacity(part.len()+2);
+                        new.extend_from_slice(&part);
                         new.push(i);
                         new_output.push(new);
                     }
@@ -142,10 +242,13 @@ pub mod util {
             }
             len += 1;
         }
-        output
+        Ok(output)
     }
 
-    pub fn combine_cluemasks(cluemasks: &[ClueMask]) -> ClueMask {
+    pub fn combine_cluemasks(cluemasks: &[ClueMask]) -> Result<ClueMask> {
+        if cluemasks.is_empty() {
+            return Err(Error::from(ErrorKind::PuzzleError));
+        }
         let len = cluemasks.first().unwrap().mask.len();
         let mut output = Vec::with_capacity(len);
         for i in 0..len {
@@ -160,7 +263,7 @@ pub mod util {
             }
             output.push(mask_part);
         }
-        ClueMask::new(output)
+        Ok(ClueMask::new(output))
     }
 }
 
@@ -335,7 +438,7 @@ impl Puzzle {
         Ok(Puzzle { input })
     }
 
-    pub fn solve(&self) -> Option<Output> {
+    pub fn solve(&self) -> Result<Output> {
         let solver = Solver::new(&self.input);
         solver.solve()
     }
@@ -378,11 +481,11 @@ impl Clue {
         filter: &ClueMask,
         mask_id: u32,
         cache: &mut SolverCache,
-    ) -> Option<ClueMask> {
+    ) -> Result<ClueMask> {
         let mut clue_mask_set = cache.clue_mask_cache.get_mut(&mask_id);
         let in_cache = clue_mask_set.is_some();
         if !in_cache {
-            let spacings = util::spacings(self.spaces_count(), self.get_total_spaces(len), cache);
+            let spacings = util::spacings(self.spaces_count(), self.get_total_spaces(len), cache)?;
             let mut clue_mask_new = Vec::with_capacity(spacings.len());
             for spacing in spacings {
                 let clue_mask_option = self.calc_mask_options(spacing, len);
@@ -398,7 +501,7 @@ impl Clue {
         if in_cache && clue_mask_set.len() > 1 {
             clue_mask_set.retain(|e| e.filter_match(filter));
         }
-        Some(util::combine_cluemasks(clue_mask_set))
+        util::combine_cluemasks(clue_mask_set)
     }
 }
 
@@ -418,7 +521,7 @@ impl<'a> Solver<'a> {
         Solver { input }
     }
 
-    pub fn solve(&self) -> Option<Output> {
+    pub fn solve(&self) -> Result<Output> {
         let mut solver_cache = SolverCache::new();
 
         let width = self.input.columns.len();
@@ -440,8 +543,8 @@ impl<'a> Solver<'a> {
                             &ClueMask::from(mask_grid.get_column(i)),
                             i as u32,
                             &mut solver_cache,
-                        );
-                        mask_grid.set_column(i, col_mask.unwrap().as_vec());
+                        )?;
+                        mask_grid.set_column(i, col_mask.as_vec());
                     }
                 }
                 SolveIter::Rows => {
@@ -451,18 +554,20 @@ impl<'a> Solver<'a> {
                             &ClueMask::from(mask_grid.get_row(i)),
                             (width + i) as u32,
                             &mut solver_cache,
-                        );
-                        mask_grid.set_row(i, row_mask.unwrap().as_vec());
+                        )?;
+                        mask_grid.set_row(i, row_mask.as_vec());
                     }
                 }
             }
             let new_unsolved = mask_grid.count_unsolved();
-            if new_unsolved == unsolved || new_unsolved == 0 {
+            if new_unsolved == 0 {
+                break;
+            } else if new_unsolved == unsolved {
                 break;
             }
             unsolved = new_unsolved;
         }
-        Some(Output::from(mask_grid))
+        Ok(Output::from(mask_grid))
     }
 }
 
@@ -480,18 +585,31 @@ impl Output {
     }
 
     pub fn to_rgba(&self, res: u32) -> Box<[u8]> {
+        let black = [0, 0, 0, 255];
+        let white = [255, 255, 255, 255];
+        let grey  = [127, 127, 127, 255];
+        let border  = [200, 200, 200, 255];
+        
         let mut rgba = Vec::new();
         for h in 0..self.height {
-            for _ in 0..res {
+            for i in 0..res {
                 for w in 0..self.width {
                     let cell = self.width * h + w;
-                    let color: Vec<u8> = match self.output_data[cell] {
-                        Mask::Set => vec![0, 0, 0, 255],
-                        Mask::Unset => vec![255, 255, 255, 255],
-                        Mask::Unknown => vec![127, 127, 127, 255],
+                    let mut color = match self.output_data[cell] {
+                        Mask::Set => &black,
+                        Mask::Unset => &white,
+                        Mask::Unknown => &grey,
                     };
-                    for _ in 0..res {
-                        rgba.append(&mut color.clone());
+                    if i == 0 || i == res-1 {
+                        color = &border;
+                    }
+                    for j in 0..res {
+                        if j == 0 || j == res-1 {
+                            rgba.extend_from_slice(&border);
+                        } else {
+                            rgba.extend_from_slice(color);
+                        }
+
                     }
                 }
             }

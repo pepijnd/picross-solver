@@ -25,12 +25,12 @@ fn main() -> picross::error::Result<()> {
     file.read_to_string(&mut input)?;
 
     let puzzle = picross::Puzzle::new(input)?;
-    let output = puzzle.solve().unwrap();
+    let output = puzzle.solve()?;
 
     let image_data = output.to_rgba(32);
 
     let path = Path::new(out_file);
-    let file = File::create(path).unwrap();
+    let file = File::create(path)?;
     let w = &mut BufWriter::new(file);
 
     let size = output.get_size();
