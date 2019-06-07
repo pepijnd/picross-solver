@@ -7,3 +7,5 @@ edition = "2018"
 [dependencies]
 error-chain = "0.12.0"
 time = "0.1.42"
+png = "0.14.0"
+hashbrown = "0.1.8"
